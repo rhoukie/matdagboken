@@ -35,6 +35,8 @@
     cursor:pointer; display:inline-flex; align-items:center; gap:7px;
   }
   .chip.on{border-color:var(--ink);background:var(--line);color:var(--ink)}
+  .timerow{display:flex;gap:7px;overflow-x:auto;margin-bottom:16px;padding-bottom:5px;-webkit-overflow-scrolling:touch}
+  .timerow .chip{flex:none;padding:8px 12px;font-variant-numeric:tabular-nums}
   .chip.cat-pumpkin.on{border-color:var(--pumpkin);background:var(--pumpkinBg);color:var(--pumpkin)}
   .chip.cat-spicy.on{border-color:var(--spicy);background:var(--spicyBg);color:#8A6B1F}
   .chip.cat-shared.on{border-color:var(--shared);background:var(--sharedBg);color:var(--shared)}
@@ -127,16 +129,29 @@ const fmtDate = ts => {
     ? `idag ${t}`
     : d.toLocaleDateString('sv-SE',{day:'numeric',month:'short'}) + ' ' + t;
 };
-const localNow = () => {
-  const d = new Date(Date.now() - new Date().getTimezoneOffset()*60000);
-  return d.toISOString().slice(0,16);
+// Närmaste kvart bakåt, t.ex. 07:52 → "07:45"
+const nearestQuarter = () => {
+  const d = new Date();
+  const m = Math.floor(d.getMinutes()/15)*15;
+  return String(d.getHours()).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+};
+// Alla kvartar på dygnet; för idag stannar listan vid nuvarande kvart
+const quarterList = (limitToNow) => {
+  const out = [];
+  const cap = limitToNow ? nearestQuarter() : '23:45';
+  for (let h=0; h<24; h++) for (let m=0; m<60; m+=15) {
+    const t = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+    if (t > cap) return out;
+    out.push(t);
+  }
+  return out;
 };
 
 /* ── Tillstånd ────────────────────────────────────────── */
 const S = {
   session:null, tab:'logga', foods:[], log:[], loaded:false, err:'',
   logger: localStorage.getItem('vem-loggar') || 'Claudine',
-  cat:'pumpkin', brand:'', smak:'', stars:0, when:'', note:'',
+  cat:'pumpkin', brand:'', smak:'', stars:0, dayChoice:'nu', timeChoice:'',
   showAll:false, editRating:null, busy:false,
 };
 const app = document.getElementById('app');
@@ -199,14 +214,23 @@ async function addEntry(){
   if (!S.brand || !S.stars || S.busy) return;
   S.busy = true; render();
   const f = S.foods.find(x=>x.marke===S.brand && (x.smak||'')===(S.smak||''));
-  const ts = S.when ? new Date(S.when).toISOString() : new Date().toISOString();
+  let ts;
+  if (S.dayChoice === 'nu') {
+    ts = new Date().toISOString();
+  } else {
+    const d = new Date();
+    if (S.dayChoice === 'igar') d.setDate(d.getDate()-1);
+    const [h,m] = (S.timeChoice || nearestQuarter()).split(':').map(Number);
+    d.setHours(h, m, 0, 0);
+    ts = d.toISOString();
+  }
   const {error} = await sb.from('logg').insert({
     ts, katt:S.cat, foder:dispName({marke:S.brand,smak:S.smak}),
-    burk:f?.burk||null, betyg:S.stars, anteckning:S.note.trim()||null, loggat_av:S.logger,
+    burk:f?.burk||null, betyg:S.stars, loggat_av:S.logger,
   });
   S.busy = false;
   if (error) { S.err = error.message; return render(); }
-  S.stars=0; S.note=''; S.when=''; S.err='';
+  S.stars=0; S.dayChoice='nu'; S.timeChoice=''; S.err='';
   toast('Sparat');
   await loadAll();
 }
@@ -237,10 +261,10 @@ function toast(msg){
   setTimeout(()=>t.remove(),1800);
 }
 function exportCsv(){
-  const head = 'datum;katt;foder;burk;betyg;anteckning;loggat_av';
+  const head = 'datum;katt;foder;burk;betyg;loggat_av';
   const rows = S.log.map(e => [
     new Date(e.ts).toLocaleString('sv-SE'), CATS[e.katt]?.name||e.katt, e.foder,
-    e.burk||'', e.betyg??'', (e.anteckning||'').replace(/;/g,','), e.loggat_av||''
+    e.burk||'', e.betyg??'', e.loggat_av||''
   ].join(';'));
   const blob = new Blob(['\ufeff'+[head,...rows].join('\n')],{type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
@@ -308,11 +332,16 @@ function loggaView(st){
         <span class="mut">${STAR_WORDS[S.stars]}</span>
       </div>
 
-      <p class="lbl">När? (lämna tomt för nu)</p>
-      <input id="when" type="datetime-local" max="${localNow()}" value="${S.when}" style="margin-bottom:14px">
-
-      <p class="lbl">Anteckning</p>
-      <input id="note" placeholder="t.ex. åt bara såsen" value="${esc(S.note)}" style="margin-bottom:16px">
+      <p class="lbl">När?</p>
+      <div class="row" style="margin-bottom:${S.dayChoice==='nu'?'16px':'10px'}">
+        ${[['nu','Nu'],['idag','Idag'],['igar','Igår']].map(([id,t])=>
+          `<button class="chip ${S.dayChoice===id?'on':''}" data-day="${id}">${t}</button>`).join('')}
+      </div>
+      ${S.dayChoice!=='nu' ? `
+        <div class="timerow">
+          ${quarterList(S.dayChoice==='idag').reverse().map(t=>
+            `<button class="chip time ${(S.timeChoice||nearestQuarter())===t?'on':''}" data-time="${t}">${t}</button>`).join('')}
+        </div>` : ''}
 
       <button class="btn" id="save" ${(!S.brand||!S.stars||S.busy)?'disabled':''}>
         ${S.busy?'Sparar…':'Spara måltid'}
@@ -338,7 +367,6 @@ function entryHtml(e){
         ${s!=null?`<span style="color:var(--star)">${'★'.repeat(s)}<span style="color:var(--starOff)">${'★'.repeat(5-s)}</span></span>`:''}
       </div>
       <div class="mut" style="display:flex;align-items:center;gap:6px">${dot(e.burk,9)}${esc(e.foder)}</div>
-      ${e.anteckning?`<div class="mut" style="font-style:italic">”${esc(e.anteckning)}”</div>`:''}
       <div class="muted">${fmtDate(e.ts)} · ${esc(e.loggat_av||'')}</div>
     </div>
     <button class="x" data-del="${e.id}" aria-label="Ta bort">✕</button>
@@ -494,8 +522,12 @@ function bind(){
     app.querySelectorAll('[data-can]').forEach(x=>x.classList.toggle('on', x===el));
   });
 
-  const w = app.querySelector('#when'); if (w) w.onchange = e => S.when = e.target.value;
-  const n = app.querySelector('#note'); if (n) n.oninput = e => S.note = e.target.value;
+  on('[data-day]', el => {
+    S.dayChoice = el.dataset.day;
+    if (S.dayChoice !== 'nu' && !S.timeChoice) S.timeChoice = nearestQuarter();
+    render();
+  });
+  on('[data-time]', el => set('timeChoice', el.dataset.time));
 
   const s = app.querySelector('#save'); if (s) s.onclick = addEntry;
   const t = app.querySelector('#toggleAll'); if (t) t.onclick = () => set('showAll', !S.showAll);
