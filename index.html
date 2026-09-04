@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Matdagboken</title>
+<meta name="theme-color" content="#F5F2EA">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F2EA; --card:#FDFCF9; --line:#E1DED4; --line2:#C9C4B8;
+    --ink:#2A2721; --mut:#6B6459; --dim:#9A9488;
+    --pumpkin:#E4650B; --pumpkinBg:#FCE8D4;
+    --spicy:#E3A312; --spicyBg:#FCF3D8;
+    --shared:#5B6357; --sharedBg:#E4E6DF;
+    --star:#E3A312; --starOff:#D8D3C6;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Nunito',system-ui,sans-serif; font-size:15px;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  .wrap{max-width:560px;margin:0 auto;padding:18px 16px 40px}
+  h1{font-family:'Fraunces',serif;font-size:31px;font-weight:800;margin:0 0 2px}
+  .sub{color:var(--mut);font-size:13.5px;margin:0 0 18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+  .lbl{font-size:13px;font-weight:700;color:var(--mut);margin:0 0 8px}
+  .row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+  .chip{
+    border:1.5px solid var(--line2); background:var(--card); color:var(--mut);
+    border-radius:20px; padding:8px 14px; font:700 13.5px 'Nunito',sans-serif;
+    cursor:pointer; display:inline-flex; align-items:center; gap:7px;
+  }
+  .chip.on{border-color:var(--ink);background:var(--line);color:var(--ink)}
+  .chip.cat-pumpkin.on{border-color:var(--pumpkin);background:var(--pumpkinBg);color:var(--pumpkin)}
+  .chip.cat-spicy.on{border-color:var(--spicy);background:var(--spicyBg);color:#8A6B1F}
+  .chip.cat-shared.on{border-color:var(--shared);background:var(--sharedBg);color:var(--shared)}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex:none}
+  .avg{color:#B8860B;font-weight:800}
+  .stars{display:flex;gap:4px}
+  .stars button{border:none;background:none;cursor:pointer;padding:2px;font-size:30px;line-height:1;color:var(--starOff)}
+  .stars button.on{color:var(--star)}
+  .stars.sm button{font-size:22px}
+  input,textarea{
+    width:100%;padding:11px 12px;border-radius:10px;border:1.5px solid var(--line2);
+    font:15px 'Nunito',sans-serif;background:var(--card);color:var(--ink)
+  }
+  .btn{
+    width:100%;border:none;border-radius:12px;padding:14px;
+    font:800 16px 'Nunito',sans-serif;cursor:pointer;background:var(--ink);color:#FDFCF9
+  }
+  .btn:disabled{opacity:.4;cursor:default}
+  .btn.ghost{background:none;border:1.5px solid var(--line2);color:var(--mut);font-size:14px;padding:11px}
+  .tabs{display:flex;gap:6px;margin-bottom:16px}
+  .tabs button{
+    flex:1;border:1.5px solid var(--line2);background:var(--card);color:var(--mut);
+    border-radius:12px;padding:10px;font:700 14px 'Nunito',sans-serif;cursor:pointer
+  }
+  .tabs button.on{background:var(--ink);border-color:var(--ink);color:#FDFCF9}
+  .entry{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line2);
+    border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;gap:8px}
+  .x{border:none;background:none;cursor:pointer;color:var(--dim);font-size:16px;align-self:center}
+  .muted{color:var(--dim);font-size:12px}
+  .mut{color:var(--mut);font-size:12.5px}
+  .verdict{font-weight:800;font-size:13px;border-radius:8px;padding:5px 9px;text-align:center}
+  .good{color:#2C4F36;background:#DDE8DC}
+  .mid{color:#8A6B1F;background:#F1E7C8}
+  .bad{color:#A83E2C;background:#F4DBD4}
+  .none{color:var(--dim);border:1px dashed var(--line2)}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#2C4F36;color:#fff;
+    padding:11px 20px;border-radius:22px;font-weight:700;font-size:14px;z-index:50}
+  .err{background:#F4DBD4;color:#A83E2C;border-radius:10px;padding:10px 12px;font-size:13.5px;margin-bottom:12px}
+  .center{text-align:center;color:var(--mut);padding:30px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><p class="center">Startar…</p></div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://fbpxtlnovuurqdmrhhma.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_MUeIwhVLkYqGA33BjX_0dw_MIc8xgQd';
+
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage }
+});
+
+/* ── Konstanter ───────────────────────────────────────── */
+const CATS = {
+  pumpkin: { name:'Pumpkin', color:'var(--pumpkin)' },
+  spicy:   { name:'Spicy',   color:'var(--spicy)'   },
+  shared:  { name:'Delad skål', color:'var(--shared)' },
+};
+const CAN_COLORS = {
+  lila:'#8E5BA6', rosa:'#E77CA8', ljusrosa:'#F2AEC6', 'mörkrosa':'#C94F7C',
+  'blå':'#3E7BC0', 'röd':'#C43B3B', 'grön':'#4C8C4A', orange:'#E07B2A', gul:'#E0BC1A',
+};
+const SEED_FOODS = [
+  ['MjAMjAM','Kalv','lila'], ['MjAMjAM','Kyckling','rosa'],
+  ["MAC's",'Kalv & kycklinghjärta','blå'], ["MAC's",'Kalkon, nötkött & anka','lila'],
+  ["MAC's",'Kalkon & kanin','rosa'],
+  ['catz finefood','Fjäderfä','röd'], ['catz finefood','Lax & fjäderfä','grön'],
+  ['catz finefood','Nötkött & kalv','orange'],
+  ['Wild Freedom','Kalv','orange'], ['Wild Freedom','Kanin','gul'], ['Wild Freedom','Kalkon','rosa'],
+  ['Animonda Carny','Fjäderfä & nötkött','orange'],
+  ['Animonda Carny','Kalv, kyckling & kalkon','ljusrosa'],
+  ['Animonda Carny','Nötkött & kalkon','mörkrosa'],
+  ['Animonda Carny','Nötkött, kyckling & kanin','grön'],
+];
+const STAR_WORDS = ['','Ratade helt','Motvilligt','Åt utan entusiasm','Gillade','Slickade tallriken ren'];
+
+/* ── Hjälpare ─────────────────────────────────────────── */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dispName = f => f.smak ? `${f.marke} – ${f.smak}` : f.marke;
+const avgOf = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
+const fmtStars = v => v.toFixed(1).replace('.',',') + ' ★';
+const dot = (can, size=11) => can && CAN_COLORS[can]
+  ? `<span class="dot" style="width:${size}px;height:${size}px;background:${CAN_COLORS[can]}"></span>` : '';
+const fmtDate = ts => {
+  const d = new Date(ts);
+  const t = d.toLocaleTimeString('sv-SE',{hour:'2-digit',minute:'2-digit'});
+  return d.toDateString() === new Date().toDateString()
+    ? `idag ${t}`
+    : d.toLocaleDateString('sv-SE',{day:'numeric',month:'short'}) + ' ' + t;
+};
+const localNow = () => {
+  const d = new Date(Date.now() - new Date().getTimezoneOffset()*60000);
+  return d.toISOString().slice(0,16);
+};
+
+/* ── Tillstånd ────────────────────────────────────────── */
+const S = {
+  session:null, tab:'logga', foods:[], log:[], loaded:false, err:'',
+  logger: localStorage.getItem('vem-loggar') || 'Claudine',
+  cat:'pumpkin', brand:'', smak:'', stars:0, when:'', note:'',
+  showAll:false, editRating:null, busy:false,
+};
+const app = document.getElementById('app');
+const set = (k,v) => { S[k]=v; render(); };
+
+/* ── Data ─────────────────────────────────────────────── */
+async function loadAll(){
+  const [f,l] = await Promise.all([
+    sb.from('foder').select('*'),
+    sb.from('logg').select('*').order('ts',{ascending:false}),
+  ]);
+  if (f.error || l.error) { S.err = (f.error||l.error).message; S.loaded=true; return render(); }
+  let foods = f.data;
+  if (!foods.length) {
+    const rows = SEED_FOODS.map(([marke,smak,burk]) => ({marke,smak,burk}));
+    const ins = await sb.from('foder').insert(rows).select();
+    if (!ins.error) foods = ins.data;
+  }
+  S.foods = foods.sort((a,b)=> a.marke.localeCompare(b.marke,'sv') || (a.smak||'').localeCompare(b.smak||'','sv'));
+  S.log = l.data; S.loaded = true; S.err=''; render();
+}
+
+const brands = () => [...new Set(S.foods.map(f=>f.marke))];
+const flavorsOf = b => S.foods.filter(f=>f.marke===b);
+
+function stats(){
+  const st = {};
+  for (const f of S.foods) st[dispName(f)] = {pumpkin:[],spicy:[]};
+  for (const e of S.log) {
+    if (!st[e.foder]) st[e.foder] = {pumpkin:[],spicy:[]};
+    if (e.betyg == null) continue;
+    for (const t of (e.katt==='shared' ? ['pumpkin','spicy'] : [e.katt]))
+      if (st[e.foder][t]) st[e.foder][t].push(e.betyg);
+  }
+  for (const f of S.foods) {
+    const d = st[dispName(f)];
+    if (f.betyg_pumpkin != null) d.pumpkin.push(f.betyg_pumpkin);
+    if (f.betyg_spicy != null) d.spicy.push(f.betyg_spicy);
+  }
+  return st;
+}
+const verdict = arr => {
+  if (!arr.length) return {label:'—',tone:'none',avg:null};
+  const a = avgOf(arr);
+  if (a >= 4) return {label:'Favorit',tone:'good',avg:a};
+  if (a >= 2.75) return {label:'Okej',tone:'mid',avg:a};
+  return {label: arr.length>=2 ? 'Rata – köp inte igen' : 'Tveksam', tone:'bad', avg:a};
+};
+
+/* ── Åtgärder ─────────────────────────────────────────── */
+async function login(email, pw, btn){
+  btn.disabled = true; btn.textContent = 'Loggar in…';
+  const {data,error} = await sb.auth.signInWithPassword({email,password:pw});
+  if (error) { S.err = 'Fel e-post eller lösenord.'; return render(); }
+  S.session = data.session; S.err=''; render(); loadAll();
+}
+async function logout(){ await sb.auth.signOut(); S.session=null; S.loaded=false; render(); }
+
+async function addEntry(){
+  if (!S.brand || !S.stars || S.busy) return;
+  S.busy = true; render();
+  const f = S.foods.find(x=>x.marke===S.brand && (x.smak||'')===(S.smak||''));
+  const ts = S.when ? new Date(S.when).toISOString() : new Date().toISOString();
+  const {error} = await sb.from('logg').insert({
+    ts, katt:S.cat, foder:dispName({marke:S.brand,smak:S.smak}),
+    burk:f?.burk||null, betyg:S.stars, anteckning:S.note.trim()||null, loggat_av:S.logger,
+  });
+  S.busy = false;
+  if (error) { S.err = error.message; return render(); }
+  S.stars=0; S.note=''; S.when=''; S.err='';
+  toast('Sparat');
+  await loadAll();
+}
+async function removeEntry(id){
+  await sb.from('logg').delete().eq('id',id);
+  S.log = S.log.filter(e=>e.id!==id); render();
+}
+async function setManual(id, catId, val){
+  const col = catId==='pumpkin' ? 'betyg_pumpkin' : 'betyg_spicy';
+  await sb.from('foder').update({[col]:val}).eq('id',id);
+  const f = S.foods.find(x=>x.id===id); if (f) f[col]=val;
+  render();
+}
+async function addFood(marke, smak, burk){
+  const {data,error} = await sb.from('foder').insert({marke,smak:smak||null,burk:burk||null}).select();
+  if (error) { S.err = error.message.includes('duplicate') ? 'Den smaken finns redan.' : error.message; return render(); }
+  S.foods = [...S.foods,...data].sort((a,b)=> a.marke.localeCompare(b.marke,'sv') || (a.smak||'').localeCompare(b.smak||'','sv'));
+  S.err=''; render();
+}
+async function removeFood(f){
+  if (!confirm(`Ta bort "${dispName(f)}" ur listan? Loggposterna behålls.`)) return;
+  await sb.from('foder').delete().eq('id',f.id);
+  S.foods = S.foods.filter(x=>x.id!==f.id); render();
+}
+function toast(msg){
+  const t = document.createElement('div');
+  t.className='toast'; t.textContent=msg; document.body.appendChild(t);
+  setTimeout(()=>t.remove(),1800);
+}
+function exportCsv(){
+  const head = 'datum;katt;foder;burk;betyg;anteckning;loggat_av';
+  const rows = S.log.map(e => [
+    new Date(e.ts).toLocaleString('sv-SE'), CATS[e.katt]?.name||e.katt, e.foder,
+    e.burk||'', e.betyg??'', (e.anteckning||'').replace(/;/g,','), e.loggat_av||''
+  ].join(';'));
+  const blob = new Blob(['\ufeff'+[head,...rows].join('\n')],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download='matdagbok.csv'; a.click();
+}
+
+/* ── Vyer ─────────────────────────────────────────────── */
+function loginView(){
+  return `
+    <h1>Matdagboken</h1>
+    <p class="sub">Vad Pumpkin och Spicy äter – och vad de ratar.</p>
+    ${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}
+    <div class="card">
+      <p class="lbl">E-post</p>
+      <input id="email" type="email" autocomplete="username" style="margin-bottom:12px">
+      <p class="lbl">Lösenord</p>
+      <input id="pw" type="password" autocomplete="current-password" style="margin-bottom:16px">
+      <button class="btn" id="loginBtn">Logga in</button>
+    </div>
+    <p class="muted" style="text-align:center">Du förblir inloggad på den här telefonen.</p>`;
+}
+
+function loggaView(st){
+  const chipAvg = f => {
+    const d = st[dispName(f)]; if (!d) return null;
+    return avgOf(S.cat==='shared' ? [...d.pumpkin,...d.spicy] : d[S.cat]||[]);
+  };
+  return `
+    <div class="card">
+      <p class="lbl">Jag loggar som</p>
+      <div class="row">
+        ${['Claudine','Jamey'].map(w=>
+          `<button class="chip ${S.logger===w?'on':''}" data-logger="${w}">${w}</button>`).join('')}
+      </div>
+
+      <p class="lbl">Vem åt?</p>
+      <div class="row">
+        ${Object.entries(CATS).map(([id,c])=>
+          `<button class="chip cat-${id} ${S.cat===id?'on':''}" data-cat="${id}">${c.name}</button>`).join('')}
+      </div>
+
+      <p class="lbl">Märke</p>
+      <div class="row">
+        ${brands().map(b=>
+          `<button class="chip ${S.brand===b?'on':''}" data-brand="${esc(b)}">${esc(b)}</button>`).join('')}
+      </div>
+
+      ${S.brand ? `
+        <p class="lbl">Smak</p>
+        <div class="row">
+          ${flavorsOf(S.brand).map(f=>{
+            const a = chipAvg(f);
+            return `<button class="chip ${(S.smak||'')===(f.smak||'')?'on':''}" data-smak="${esc(f.smak||'')}">
+              ${dot(f.burk)}${esc(f.smak||'Standard')}
+              ${a!==null?`<span class="avg">${fmtStars(a)}</span>`:''}
+            </button>`;
+          }).join('')}
+        </div>` : ''}
+
+      <p class="lbl">Betyg – hur väl gick maten hem?</p>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div class="stars" data-stars="new">
+          ${[1,2,3,4,5].map(n=>`<button class="${n<=S.stars?'on':''}" data-n="${n}">★</button>`).join('')}
+        </div>
+        <span class="mut">${STAR_WORDS[S.stars]}</span>
+      </div>
+
+      <p class="lbl">När? (lämna tomt för nu)</p>
+      <input id="when" type="datetime-local" max="${localNow()}" value="${S.when}" style="margin-bottom:14px">
+
+      <p class="lbl">Anteckning</p>
+      <input id="note" placeholder="t.ex. åt bara såsen" value="${esc(S.note)}" style="margin-bottom:16px">
+
+      <button class="btn" id="save" ${(!S.brand||!S.stars||S.busy)?'disabled':''}>
+        ${S.busy?'Sparar…':'Spara måltid'}
+      </button>
+    </div>
+
+    ${S.log.length ? `
+      <div class="card">
+        <p class="lbl" style="margin-bottom:10px">Senaste måltiderna</p>
+        ${(S.showAll?S.log:S.log.slice(0,5)).map(entryHtml).join('')}
+        ${S.log.length>5 ? `<button class="btn ghost" id="toggleAll">
+          ${S.showAll?'Visa färre':`Visa alla (${S.log.length})`}</button>` : ''}
+      </div>` : ''}`;
+}
+
+function entryHtml(e){
+  const c = CATS[e.katt] || CATS.shared;
+  const s = e.betyg;
+  return `<div class="entry" style="border-left-color:${c.color}">
+    <div style="min-width:0">
+      <div style="font-weight:800;font-size:14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        ${c.name}
+        ${s!=null?`<span style="color:var(--star)">${'★'.repeat(s)}<span style="color:var(--starOff)">${'★'.repeat(5-s)}</span></span>`:''}
+      </div>
+      <div class="mut" style="display:flex;align-items:center;gap:6px">${dot(e.burk,9)}${esc(e.foder)}</div>
+      ${e.anteckning?`<div class="mut" style="font-style:italic">”${esc(e.anteckning)}”</div>`:''}
+      <div class="muted">${fmtDate(e.ts)} · ${esc(e.loggat_av||'')}</div>
+    </div>
+    <button class="x" data-del="${e.id}" aria-label="Ta bort">✕</button>
+  </div>`;
+}
+
+function oversiktView(st){
+  if (!S.log.length) return `<p class="center">Inga måltider loggade ännu. Börja i fliken Logga.</p>`;
+  const today = new Date().toDateString(), weekAgo = Date.now()-7*864e5;
+  const d = {pumpkin:{today:0,week:0,stars:[]}, spicy:{today:0,week:0,stars:[]}};
+  for (const e of S.log)
+    for (const t of (e.katt==='shared'?['pumpkin','spicy']:[e.katt])) {
+      if (!d[t]) continue;
+      if (new Date(e.ts).toDateString()===today) d[t].today++;
+      if (new Date(e.ts).getTime()>=weekAgo) { d[t].week++; if (e.betyg!=null) d[t].stars.push(e.betyg); }
+    }
+  const ranked = Object.entries(st)
+    .map(([food,s])=>({food,s,all:[...s.pumpkin,...s.spicy]}))
+    .map(o=>({...o, avg: o.all.length?avgOf(o.all):-1}))
+    .sort((a,b)=>b.avg-a.avg);
+
+  return `
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      ${['pumpkin','spicy'].map(id=>{
+        const a = avgOf(d[id].stars);
+        return `<div style="flex:1;background:var(--${id}Bg);border:1.5px solid var(--${id});border-radius:14px;padding:12px 14px">
+          <div style="font-weight:800;font-size:14px;color:var(--${id})">${CATS[id].name}</div>
+          <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:800;margin:2px 0">${d[id].today}</div>
+          <div class="mut">${d[id].today===1?'måltid idag':'måltider idag'}</div>
+          <div class="mut" style="margin-top:4px">7 dagar: ${d[id].week} st${a!==null?` · snitt ${fmtStars(a)}`:''}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    ${ranked.map(({food,s,all})=>{
+      const vp = verdict(s.pumpkin), vs = verdict(s.spicy);
+      const f = S.foods.find(x=>dispName(x)===food);
+      return `<div class="card" style="padding:14px 16px;margin-bottom:10px">
+        <div style="font-weight:800;font-size:15px;margin-bottom:8px;display:flex;align-items:center;gap:7px">
+          ${dot(f?.burk)}${esc(food)}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${[['pumpkin',vp],['spicy',vs]].map(([id,v])=>`
+            <div style="flex:1 1 45%;min-width:140px">
+              <div style="font-size:12px;font-weight:700;color:var(--${id});margin-bottom:3px">${CATS[id].name}</div>
+              <div class="verdict ${v.tone}">${v.label}${v.avg!==null?` · ${v.avg.toFixed(1).replace('.',',')} ★`:''}</div>
+            </div>`).join('')}
+        </div>
+        <div class="muted" style="margin-top:7px">${all.length} betyg</div>
+      </div>`;
+    }).join('')}
+
+    <p class="mut">Betyget är snittet av stjärnorna per katt, inklusive manuellt satta betyg (en röst vardera). Delad skål räknas för båda. ”Rata” visas först efter minst två betyg.</p>
+    <button class="btn ghost" id="csv" style="margin-top:10px">Exportera som CSV</button>`;
+}
+
+function foderView(st){
+  return `
+    ${brands().map(b=>`
+      <div class="card">
+        <div style="font-family:'Fraunces',serif;font-size:18px;font-weight:800;margin-bottom:10px">${esc(b)}</div>
+        ${flavorsOf(b).map(f=>{
+          const name = dispName(f), d = st[name] || {pumpkin:[],spicy:[]};
+          const open = S.editRating === name;
+          return `<div style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 14px;margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <span style="font-size:14px;font-weight:600;display:inline-flex;align-items:center;gap:8px;min-width:0">
+                ${dot(f.burk)}<span style="overflow:hidden;text-overflow:ellipsis">${esc(f.smak||'Standard')}</span>
+              </span>
+              <span style="display:inline-flex;align-items:center;gap:4px;flex:none">
+                <button class="chip ${open?'on':''}" style="padding:3px 10px;font-size:12.5px" data-edit="${esc(name)}">Betyg</button>
+                <button class="x" data-delfood="${f.id}" aria-label="Ta bort">✕</button>
+              </span>
+            </div>
+            ${open ? `<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">
+              ${['pumpkin','spicy'].map(id=>{
+                const a = avgOf(d[id]);
+                const manual = id==='pumpkin' ? f.betyg_pumpkin : f.betyg_spicy;
+                return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+                  <span style="font-size:13px;font-weight:700;color:var(--${id});width:70px">${CATS[id].name}</span>
+                  <div class="stars sm" data-manual="${f.id}" data-mcat="${id}">
+                    ${[1,2,3,4,5].map(n=>`<button class="${n<=(manual||0)?'on':''}" data-n="${n}">★</button>`).join('')}
+                  </div>
+                  ${manual!=null?`<button class="x" style="font-size:12.5px;text-decoration:underline" data-clear="${f.id}" data-mcat="${id}">rensa</button>`:''}
+                  <span class="mut">${a!==null?`snitt ${fmtStars(a)} · ${d[id].length} betyg`:'inga betyg än'}</span>
+                </div>`;
+              }).join('')}
+              <p class="muted" style="margin:0">Stjärnorna här är ert manuella betyg – det räknas som en röst i snittet, utöver måltidsloggarna.</p>
+            </div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>`).join('')}
+
+    <div class="card">
+      <p class="lbl">Lägg till sort</p>
+      <input id="nBrand" placeholder="Märke, t.ex. MAC's" list="brandList" style="margin-bottom:8px">
+      <datalist id="brandList">${brands().map(b=>`<option value="${esc(b)}">`).join('')}</datalist>
+      <input id="nSmak" placeholder="Smak, t.ex. Kalv & kyckling" style="margin-bottom:8px">
+      <p class="lbl">Burkfärg</p>
+      <div class="row">
+        ${Object.entries(CAN_COLORS).map(([k,v])=>
+          `<button class="chip" data-can="${k}" style="padding:6px 10px">${dot(k)}${k}</button>`).join('')}
+      </div>
+      <button class="btn ghost" id="addFood">Lägg till</button>
+    </div>`;
+}
+
+let pickedCan = '';
+function render(){
+  if (!S.session) { app.innerHTML = loginView(); return bind(); }
+  if (!S.loaded) { app.innerHTML = `<p class="center">Hämtar dagboken…</p>`; return; }
+  const st = stats();
+  app.innerHTML = `
+    <h1>Matdagboken</h1>
+    <p class="sub">Vad Pumpkin och Spicy äter – och vad de ratar.</p>
+    ${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}
+    <div class="tabs">
+      ${[['logga','Logga'],['oversikt','Översikt'],['foder','Foder']].map(([id,t])=>
+        `<button class="${S.tab===id?'on':''}" data-tab="${id}">${t}</button>`).join('')}
+    </div>
+    ${S.tab==='logga' ? loggaView(st) : S.tab==='oversikt' ? oversiktView(st) : foderView(st)}
+    <button class="btn ghost" id="logout" style="margin-top:18px">Logga ut</button>`;
+  bind();
+}
+
+function bind(){
+  const on = (sel,fn) => app.querySelectorAll(sel).forEach(el=>el.onclick = ()=>fn(el));
+
+  const btn = app.querySelector('#loginBtn');
+  if (btn) {
+    const go = () => login(app.querySelector('#email').value.trim(), app.querySelector('#pw').value, btn);
+    btn.onclick = go;
+    app.querySelector('#pw').onkeydown = e => { if (e.key==='Enter') go(); };
+    return;
+  }
+
+  on('[data-tab]', el => { S.editRating=null; set('tab', el.dataset.tab); });
+  on('[data-logger]', el => { localStorage.setItem('vem-loggar', el.dataset.logger); set('logger', el.dataset.logger); });
+  on('[data-cat]', el => set('cat', el.dataset.cat));
+  on('[data-brand]', el => { S.brand = el.dataset.brand; const f=flavorsOf(S.brand); S.smak = f.length===1 ? (f[0].smak||'') : ''; render(); });
+  on('[data-smak]', el => set('smak', el.dataset.smak));
+  on('[data-stars="new"] button', el => set('stars', +el.dataset.n));
+  on('[data-del]', el => removeEntry(el.dataset.del));
+  on('[data-delfood]', el => removeFood(S.foods.find(f=>f.id===el.dataset.delfood)));
+  on('[data-edit]', el => set('editRating', S.editRating===el.dataset.edit ? null : el.dataset.edit));
+  on('[data-manual] button', el => {
+    const p = el.closest('[data-manual]');
+    setManual(p.dataset.manual, p.dataset.mcat, +el.dataset.n);
+  });
+  on('[data-clear]', el => setManual(el.dataset.clear, el.dataset.mcat, null));
+  on('[data-can]', el => {
+    pickedCan = el.dataset.can;
+    app.querySelectorAll('[data-can]').forEach(x=>x.classList.toggle('on', x===el));
+  });
+
+  const w = app.querySelector('#when'); if (w) w.onchange = e => S.when = e.target.value;
+  const n = app.querySelector('#note'); if (n) n.oninput = e => S.note = e.target.value;
+
+  const s = app.querySelector('#save'); if (s) s.onclick = addEntry;
+  const t = app.querySelector('#toggleAll'); if (t) t.onclick = () => set('showAll', !S.showAll);
+  const c = app.querySelector('#csv'); if (c) c.onclick = exportCsv;
+  const lo = app.querySelector('#logout'); if (lo) lo.onclick = logout;
+  const af = app.querySelector('#addFood');
+  if (af) af.onclick = () => {
+    const b = app.querySelector('#nBrand').value.trim();
+    const f = app.querySelector('#nSmak').value.trim();
+    if (!b) return;
+    addFood(b, f, pickedCan); pickedCan='';
+  };
+}
+
+/* ── Start ────────────────────────────────────────────── */
+const { data:{ session } } = await sb.auth.getSession();
+S.session = session;
+render();
+if (session) loadAll();
+sb.auth.onAuthStateChange((_e, s) => { if (!s) { S.session=null; S.loaded=false; render(); } });
+</script>
+</body>
+</html>
