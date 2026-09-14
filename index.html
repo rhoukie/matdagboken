@@ -152,6 +152,7 @@ const S = {
   session:null, tab:'logga', foods:[], log:[], loaded:false, err:'',
   logger: localStorage.getItem('vem-loggar') || 'Claudine',
   cat:'pumpkin', brand:'', smak:'', stars:0, dayChoice:'nu', timeChoice:'',
+  servering:'', mangd:'',
   showAll:false, editRating:null, busy:false,
 };
 const app = document.getElementById('app');
@@ -179,10 +180,12 @@ const flavorsOf = b => S.foods.filter(f=>f.marke===b);
 
 function stats(){
   const st = {};
-  for (const f of S.foods) st[dispName(f)] = {pumpkin:[],spicy:[]};
+  for (const f of S.foods) st[dispName(f)] = {pumpkin:[],spicy:[],ny:[],kyld:[]};
   for (const e of S.log) {
-    if (!st[e.foder]) st[e.foder] = {pumpkin:[],spicy:[]};
+    if (!st[e.foder]) st[e.foder] = {pumpkin:[],spicy:[],ny:[],kyld:[]};
     if (e.betyg == null) continue;
+    if (e.servering === 'ny') st[e.foder].ny.push(e.betyg);
+    if (e.servering === 'kyld') st[e.foder].kyld.push(e.betyg);
     for (const t of (e.katt==='shared' ? ['pumpkin','spicy'] : [e.katt]))
       if (st[e.foder][t]) st[e.foder][t].push(e.betyg);
   }
@@ -227,10 +230,11 @@ async function addEntry(){
   const {error} = await sb.from('logg').insert({
     ts, katt:S.cat, foder:dispName({marke:S.brand,smak:S.smak}),
     burk:f?.burk||null, betyg:S.stars, loggat_av:S.logger,
+    servering:S.servering||null, mangd:S.mangd ? Number(S.mangd) : null,
   });
   S.busy = false;
   if (error) { S.err = error.message; return render(); }
-  S.stars=0; S.dayChoice='nu'; S.timeChoice=''; S.err='';
+  S.stars=0; S.dayChoice='nu'; S.timeChoice=''; S.servering=''; S.mangd=''; S.err='';
   toast('Sparat');
   await loadAll();
 }
@@ -261,10 +265,12 @@ function toast(msg){
   setTimeout(()=>t.remove(),1800);
 }
 function exportCsv(){
-  const head = 'datum;katt;foder;burk;betyg;loggat_av';
+  const head = 'datum;katt;foder;burk;betyg;servering;mangd_g;loggat_av';
   const rows = S.log.map(e => [
     new Date(e.ts).toLocaleString('sv-SE'), CATS[e.katt]?.name||e.katt, e.foder,
-    e.burk||'', e.betyg??'', e.loggat_av||''
+    e.burk||'', e.betyg??'',
+    e.servering==='ny'?'Nyöppnad':e.servering==='kyld'?'Kyld, mikrad':'',
+    e.mangd??'', e.loggat_av||''
   ].join(';'));
   const blob = new Blob(['\ufeff'+[head,...rows].join('\n')],{type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
@@ -343,6 +349,15 @@ function loggaView(st){
             `<button class="chip time ${(S.timeChoice||nearestQuarter())===t?'on':''}" data-time="${t}">${t}</button>`).join('')}
         </div>` : ''}
 
+      <p class="lbl">Servering</p>
+      <div class="row">
+        ${[['ny','Nyöppnad burk'],['kyld','Från kylen, mikrad']].map(([id,t])=>
+          `<button class="chip ${S.servering===id?'on':''}" data-serv="${id}">${t}</button>`).join('')}
+      </div>
+
+      <p class="lbl">Mängd i gram <span style="font-weight:400">– valfritt</span></p>
+      <input id="mangd" inputmode="numeric" placeholder="t.ex. 60" value="${esc(S.mangd)}" style="margin-bottom:16px">
+
       <button class="btn" id="save" ${(!S.brand||!S.stars||S.busy)?'disabled':''}>
         ${S.busy?'Sparar…':'Spara måltid'}
       </button>
@@ -367,6 +382,9 @@ function entryHtml(e){
         ${s!=null?`<span style="color:var(--star)">${'★'.repeat(s)}<span style="color:var(--starOff)">${'★'.repeat(5-s)}</span></span>`:''}
       </div>
       <div class="mut" style="display:flex;align-items:center;gap:6px">${dot(e.burk,9)}${esc(e.foder)}</div>
+      ${(e.servering||e.mangd)?`<div class="muted">${
+        e.servering==='ny' ? 'Nyöppnad' : e.servering==='kyld' ? 'Kyld, mikrad' : ''
+      }${e.servering&&e.mangd?' · ':''}${e.mangd?e.mangd+' g':''}</div>`:''}
       <div class="muted">${fmtDate(e.ts)} · ${esc(e.loggat_av||'')}</div>
     </div>
     <button class="x" data-del="${e.id}" aria-label="Ta bort">✕</button>
@@ -416,6 +434,9 @@ function oversiktView(st){
             </div>`).join('')}
         </div>
         <div class="muted" style="margin-top:7px">${all.length} betyg</div>
+        ${(s.ny.length && s.kyld.length) ? `<div class="mut" style="margin-top:4px">
+          Nyöppnad ${fmtStars(avgOf(s.ny))} (${s.ny.length}) · Kyld ${fmtStars(avgOf(s.kyld))} (${s.kyld.length})
+        </div>` : ''}
       </div>`;
     }).join('')}
 
@@ -528,6 +549,9 @@ function bind(){
     render();
   });
   on('[data-time]', el => set('timeChoice', el.dataset.time));
+  on('[data-serv]', el => set('servering', S.servering===el.dataset.serv ? '' : el.dataset.serv));
+  const mg = app.querySelector('#mangd');
+  if (mg) mg.oninput = e => { S.mangd = e.target.value.replace(/[^0-9]/g,''); e.target.value = S.mangd; };
 
   const s = app.querySelector('#save'); if (s) s.onclick = addEntry;
   const t = app.querySelector('#toggleAll'); if (t) t.onclick = () => set('showAll', !S.showAll);
